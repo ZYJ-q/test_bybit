@@ -89,10 +89,14 @@ impl KucoinHttpClient {
 
             let mut hmac = Hmac::<Sha256>::new_from_slice(self.api_secret.as_bytes()).unwrap();
             hmac.update(str_to_sign.as_bytes());
-            let sign = hmac.finalize().into_bytes();
+            let sign_bytes = hmac.finalize().into_bytes();
+            let sign = hex::encode(sign_bytes);
+
+            println!("singssssss{}", sign);
+
                 headers.insert(
                     "X-BAPI-SIGN",
-                    HeaderValue::try_from(general_purpose::STANDARD.encode(sign)).unwrap(),
+                    sign.parse().unwrap(),
                 );
                 headers.insert("X-BAPI-TIMESTAMP", now_time.to_string().parse().unwrap());
                 headers.insert("X-BAPI-API-KEY", self.api_key.parse().unwrap());
@@ -100,6 +104,7 @@ impl KucoinHttpClient {
                 headers.insert("X-BAPI-SIGN-TYPE", "2".parse().unwrap());
                 headers.insert("Content-Type", "application/json; charset=utf-8".parse().unwrap());
         }
+        println!("headers{:?}", headers);
         headers.insert("User-Agent", "nautilus_alarm".parse().unwrap());
         let url = format!("{}{}", self.base_url, uri);
 
