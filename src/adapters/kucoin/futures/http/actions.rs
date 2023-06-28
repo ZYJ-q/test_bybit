@@ -13,9 +13,8 @@ impl KucoinFuturesApi {
         base_url: &str,
         api_key: &str,
         api_secret: &str,
-        recv_window: &str,
     ) -> Self {
-        let client = KucoinHttpClient::new(base_url, api_key, api_secret, recv_window, );
+        let client = KucoinHttpClient::new(base_url, api_key, api_secret);
         Self { client: client }
     }
 
@@ -25,21 +24,21 @@ impl KucoinFuturesApi {
         let mut params: HashMap<String, Value> = HashMap::new();
         params.insert(
             String::from("accountType"),
-            serde_json::to_value(account_type).unwrap(),
+            Value::from(account_type),
         );
 
         let response = self
             .client
-            .send(Method::GET, "/v5/account/wallet-balance", true, &params)
+            .send(Method::GET, "/v5/account/wallet-balance", true,&mut params)
             .await;
 
         let res_data = self.client.check_response_data(response);
 
-        println!("账户信息{:?}", res_data);
+        println!("账户信息11111111111111111111{:?}", res_data);
 
         match res_data {
             Some(data) => {
-                return Some(data);
+                return Some(serde_json::Value::String(data));
             }
             None => {
                 return None;

@@ -98,11 +98,6 @@ async fn real_time(
                 .unwrap()
                 .as_str()
                 .unwrap(),
-                binance_config
-                .get("recv_window")
-                .unwrap()
-                .as_str()
-                .unwrap(),
         );
         // let name = binance_config.get("name").unwrap().as_str().unwrap();
         for symbol_v in symbols {

@@ -1,11 +1,10 @@
 use super::super::super::super::super::base::http::HttpClient;
-use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
+use hex;
 use hmac::{Hmac, Mac};
 use itertools::Itertools;
-#[allow(unused_imports)]
-use log::{error, info};
-use reqwest::header::{HeaderMap, HeaderValue};
+use log::{error};
+use reqwest::header::HeaderMap;
 use reqwest::{Method, Response, StatusCode};
 use serde_json::value::Value;
 use sha2::Sha256;
@@ -17,28 +16,17 @@ pub struct KucoinHttpClient {
     base_url: String,
     api_key: String,
     api_secret: String,
-    recv_window: String,
-    // isv1api: bool,
 }
 
 #[allow(dead_code)]
 impl KucoinHttpClient {
-    pub fn new(
-        base_url: &str,
-        api_key: &str,
-        api_secret: &str,
-        recv_window: &str,
-        // isv1api: bool,
-    ) -> Self {
+    pub fn new(base_url: &str, api_key: &str, api_secret: &str) -> Self {
         let http_client = HttpClient::new();
         Self {
             http_client: http_client,
             base_url: String::from(base_url),
             api_key: String::from(api_key),
             api_secret: String::from(api_secret),
-            recv_window: String::from(recv_window)
-            // passphrase: String::from(passphrase),
-            // isv1api: isv1api,
         }
     }
 
@@ -47,10 +35,9 @@ impl KucoinHttpClient {
         method: &Method,
         url: &str,
         need_sign: bool,
-        params: &HashMap<String, Value>,
+        params: &mut HashMap<String, Value>,
     ) -> Option<Response> {
         // env_logger::init();
-        let mut uri_path = String::from(url);
         let mut uri = String::from(url);
         let mut data_json = String::new();
 
@@ -58,7 +45,12 @@ impl KucoinHttpClient {
             if !params.is_empty() {
                 let mut strl: Vec<String> = Vec::new();
                 for key in params.keys().sorted() {
-                    strl.push(format!("{}={}", key, params.get(key).unwrap().to_string()));
+                    let value = params.get(key).unwrap();
+                    if value.is_string() {
+                        strl.push(format!("{}={}", key, value.as_str().unwrap()));
+                    }else {
+                        strl.push(format!("{}={}", key, value));
+                    }
                 }
                 for i in 0..strl.len() {
                     if i == 0 {
@@ -69,7 +61,6 @@ impl KucoinHttpClient {
                     }
                 }
                 uri = format!("{}?{}", &uri, &data_json);
-                uri_path = String::from(&uri);
             }
         } else {
             if !params.is_empty() {
@@ -77,38 +68,35 @@ impl KucoinHttpClient {
                     Ok(result) => data_json = result,
                     Err(e) => error!("error on parase params: {}", e),
                 }
-                uri_path = format!("{}{}", &uri, &data_json);
             }
         }
+
         let mut headers = HeaderMap::new();
         if need_sign {
             let now_time = Utc::now().timestamp_millis();
-            println!("api_key{}, secret_key{}", self.api_key, self.api_secret );
-
-            let str_to_sign = format!("{}{}{}{}", &now_time.to_string(), self.api_key, self.recv_window, data_json);
-            println!("str_to_sign{}", str_to_sign);
+            println!("data_json{}", data_json);
+            let str_to_sign = format!("{}{}{}{}", now_time, self.api_key, 5000, &data_json);
+            // println!("{str_to_sign}");
 
             let mut hmac = Hmac::<Sha256>::new_from_slice(self.api_secret.as_bytes()).unwrap();
             hmac.update(str_to_sign.as_bytes());
             let sign_bytes = hmac.finalize().into_bytes();
             let sign = hex::encode(sign_bytes);
 
-            println!("singssssss{}", sign);
+            // uri = format!("{}&signature={}", &uri, &sign);
+            headers.insert("X-BAPI-SIGN-TYPE", "2".parse().unwrap());
+            headers.insert("X-BAPI-SIGN", sign.parse().unwrap());
+            headers.insert("X-BAPI-API-KEY", self.api_key.parse().unwrap());
+            headers.insert("X-BAPI-TIMESTAMP", now_time.into());
+            headers.insert("X-BAPI-RECV-WINDOW", "5000".parse().unwrap());
+            headers.insert("Content-Type", "application/json; charset=utf-8".parse().unwrap());
 
-                headers.insert(
-                    "X-BAPI-SIGN",
-                    sign.parse().unwrap(),
-                );
-                headers.insert("X-BAPI-TIMESTAMP", now_time.to_string().parse().unwrap());
-                headers.insert("X-BAPI-API-KEY", self.api_key.parse().unwrap());
-                headers.insert("X-BAPI-RECV-WINDOW", self.recv_window.parse().unwrap());
-                headers.insert("X-BAPI-SIGN-TYPE", "2".parse().unwrap());
-                headers.insert("Content-Type", "application/json; charset=utf-8".parse().unwrap());
+            // headers.insert("X-MBX-APIKEY", self.api_key.parse().unwrap());
+            // headers.insert("Content-Type", "application/json".parse().unwrap());
         }
-        println!("headers{:?}", headers);
         headers.insert("User-Agent", "nautilus_alarm".parse().unwrap());
         let url = format!("{}{}", self.base_url, uri);
-
+        // println!("{},{},{:?},{}", &method.as_str(), url, headers, data_json);
         return self
             .http_client
             .send_request(&method.as_str(), &url, headers, &data_json)
@@ -120,32 +108,30 @@ impl KucoinHttpClient {
         method: Method,
         url: &str,
         need_sign: bool,
-        params: &HashMap<String, Value>,
-    ) -> Option<HashMap<String, Value>> {
+        params: &mut HashMap<String, Value>,
+    ) -> Option<String> {
         // let data: HashMap<String, Value> = HashMap::new();
         if let Some(response) = self.package_request(&method, url, need_sign, params).await {
             if response.status() == StatusCode::OK {
-                match response.json().await {
-                    Ok(response_data) => match response_data {
-                        Some(data) => {
-                            return Some(data);
-                        }
-                        None => {
-                            error!("error on parse json: {:?}", response_data);
-                            return None;
-                        }
+                match response.text().await {
+                    Ok(response_data) => {
+                        return Some(response_data);
                     },
                     Err(e) => {
-                        error!("error on parse response: {}", e);
+                        error!("error on parse response: {:?}", e);
                         return None;
                     }
                 }
             } else {
-                panic!("{}-{}", response.status(), response.text().await.unwrap());
+                panic!(
+                    "code status error: {}-{}",
+                    response.status(),
+                    response.text().await.unwrap()
+                );
             }
         } else {
             panic!(
-                "none response: {}-{}-{}-{:?}",
+                "none response: {},{},{},{:?}",
                 &method.as_str(),
                 url,
                 need_sign,
@@ -154,32 +140,15 @@ impl KucoinHttpClient {
         }
     }
 
-    pub fn check_response_data(&self, data_s: Option<HashMap<String, Value>>) -> Option<Value> {
+    // todo
+    pub fn check_response_data(&self, data_s: Option<String>) -> Option<String> {
         match data_s {
             Some(data) => {
                 if !data.is_empty() {
-                    match data.get("code") {
-                        Some(code) => {
-                            if code.to_string() == "200000" {
-                                match data.get("data") {
-                                    Some(data_r) => {
-                                        return Some(data_r.clone());
-                                    }
-                                    None => {
-                                        info!("response: {}-{:?}", code, data);
-                                        return None;
-                                    }
-                                }
-                            } else if code.to_string() == "100001" {
-                                info!("response: {}-{:?}", code, data);
-                                return None;
-                            } else {
-                                panic!("invalid code: {}", code);
-                            }
-                        }
-                        None => {
-                            panic!("no code: {:?}", data);
-                        }
+                    if data.contains("code") {
+                        panic!("code: {}", data);
+                    }else {
+                        return Some(data);
                     }
                 } else {
                     panic!("response is empty");
