@@ -83,6 +83,7 @@ impl KucoinHttpClient {
         let mut headers = HeaderMap::new();
         if need_sign {
             let now_time = Utc::now().timestamp_millis();
+            println!("api_key{}, secret_key{}", self.api_key, self.api_secret );
 
             let str_to_sign = format!("{}{}{}{}", &now_time.to_string(), self.api_key, self.recv_window, data_json);
             println!("str_to_sign{}", str_to_sign);
