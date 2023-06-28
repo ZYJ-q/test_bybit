@@ -104,7 +104,7 @@ async fn real_time(
                 .as_str()
                 .unwrap(),
         );
-        let name = binance_config.get("name").unwrap().as_str().unwrap();
+        // let name = binance_config.get("name").unwrap().as_str().unwrap();
         for symbol_v in symbols {
             let symbol = symbol_v.as_str().unwrap();
             let symbol = format!("{}", symbol);
