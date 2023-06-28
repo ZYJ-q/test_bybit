@@ -103,7 +103,7 @@ async fn real_time(
         for symbol_v in symbols {
             let symbol = symbol_v.as_str().unwrap();
             let symbol = format!("{}", symbol);
-            if let Some(data) = binance_futures_api.get_account_overview(Some("linear")).await {
+            if let Some(data) = binance_futures_api.get_account_overview(Some("UNIFIED")).await {
                 // let v: Value = serde_json::from_str(&data).unwrap();
 
                 println!("账户信息{:?}", data);
